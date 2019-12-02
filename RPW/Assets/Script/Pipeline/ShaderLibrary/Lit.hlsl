@@ -23,12 +23,14 @@ UNITY_INSTANCING_BUFFER_END(PerInstance)
 struct VertexInput
 {
     float4 pos : POSITION;
+    float3 normal : NORMAL;
 	UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
 struct VertexOutput
 {
     float4 clipPos : SV_POSITION;
+    float3 normal : TEXCOORD;
 	UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -39,13 +41,18 @@ VertexOutput LitPassVertex(VertexInput input)
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     float4 worldPos = mul(UNITY_MATRIX_M, float4(input.pos.xyz, 1.0));
     output.clipPos = mul(unity_MatrixVP, worldPos);
+    output.normal = mul((float3x3) UNITY_MATRIX_M, input.normal);
     return output;
 }
 
 float4 LitPassFragment(VertexOutput input) : SV_TARGET
 {
     UNITY_SETUP_INSTANCE_ID(input);
-    return UNITY_ACCESS_INSTANCED_PROP(PerInstance, _Color);
+    input.normal = normalize(input.normal);
+    float3 albedo = UNITY_ACCESS_INSTANCED_PROP(PerInstance, _Color).rgb;
+    
+    float3 color = input.normal;
+    return float4(color, 1);
 }
 
 #endif // MYRP_LIT_INCLUDED
