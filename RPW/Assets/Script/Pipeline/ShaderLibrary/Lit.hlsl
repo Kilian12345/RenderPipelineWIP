@@ -15,14 +15,14 @@ CBUFFER_END
 
 CBUFFER_START(_LightBuffer)
 float4 _VisibleLightColors[MAX_VISIBLE_LIGHTS];
-float4 _VisibleLightDirections[MAX_VISIBLE_LIGHTS];
+float4 _VisibleLightDirectionsOrPositions[MAX_VISIBLE_LIGHTS];
 CBUFFER_END
 
 float3 DiffuseLight (int index, float3 normal)
 {
     float3 lightColor = _VisibleLightColors[index].rgb;
-    float3 lightDirection = _VisibleLightDirections[index].xyz;
-    float diffuse = saturate(dot(normal, lightDirection));
+    float3 lightPositionOrDirection = _VisibleLightDirectionsOrPositions[index].xyz;
+    float diffuse = saturate(dot(normal, lightPositionOrDirection));
     return diffuse * lightColor;
 }
 

@@ -13,10 +13,10 @@ public class MyPipeline : RenderPipeline
     //light buffer
     const int maxVisibleLights = 4;
     static int visibleLightColoredId = Shader.PropertyToID("_VisibleLightColors");
-    static int visibleLightDirectionsId = Shader.PropertyToID("_VisibleLightDirections");
+    static int visibleLightDirectionsOrPositionsId = Shader.PropertyToID("_VisibleLightDirectionsOrPositions");
 
     Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
-    Vector4[] visibleLightDirections = new Vector4[maxVisibleLights];
+    Vector4[] visibleLightDirectionsOrPositions = new Vector4[maxVisibleLights];
 
     void Render(ScriptableRenderContext context, Camera camera)
     {
@@ -124,15 +124,31 @@ public class MyPipeline : RenderPipeline
 
     void ConfigureLights()
     {
-        for(int i = 0; i < cull.visibleLights.Count; i++)
+        int i = 0;
+        for( ; i < cull.visibleLights.Count; i++)
         {
+            if(i == maxVisibleLights) {break;}
+
             VisibleLight light = cull.visibleLights[i];
             visibleLightColors[i] = light.finalColor;
-            Vector4 v = light.localToWorld.GetColumn(2);
-            v.x = -v.x;
-            v.y = -v.y;
-            v.z = -v.z;
-            visibleLightDirections[i] = v;
+
+            if (light.lightType == LightType.Point)
+            {
+                Vector4 v = light.localToWorld.GetColumn(2);
+                v.x = -v.x;
+                v.y = -v.y;
+                v.z = -v.z;
+                visibleLightDirectionsOrPositions[i] = v;
+            }
+            else
+            {
+                visibleLightDirectionsOrPositions[i] = light.localToWorld.GetColumn(3);
+            }
+        }
+
+        for(; i < maxVisibleLights; i++)
+        {
+            visibleLightColors[i] = Color.clear;
         }
     }
 }
