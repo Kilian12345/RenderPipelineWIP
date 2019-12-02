@@ -10,6 +10,14 @@ public class MyPipeline : RenderPipeline
 
     Material errorMaterial;
 
+    //light buffer
+    const int maxVisibleLights = 4;
+    static int visibleLightColoredId = Shader.PropertyToID("_VisibleLightColors");
+    static int visibleLightDirectionsId = Shader.PropertyToID("_VisibleLightDirections");
+
+    Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
+    Vector4[] visibleLightDirections = new Vector4[maxVisibleLights];
+
     void Render(ScriptableRenderContext context, Camera camera)
     {
         ScriptableCullingParameters cullingParameters;
@@ -27,8 +35,19 @@ public class MyPipeline : RenderPipeline
 
         context.SetupCameraProperties(camera);
         CameraClearFlags clearFlags = camera.clearFlags;
-        cameraBuffer.ClearRenderTarget(true, false, Color.clear);
+        cameraBuffer.ClearRenderTarget(
+            (clearFlags & CameraClearFlags.Depth) != 0,
+            (clearFlags & CameraClearFlags.Color) != 0,
+            camera.backgroundColor
+        );
+
+        ConfigureLights();
+
         cameraBuffer.BeginSample("Render Camera");
+        // Light buffer
+        cameraBuffer.SetGlobalVectorArray(visibleLightColoredId, visibleLightColors);
+        cameraBuffer.SetGlobalVectorArray(visibleLightDirectionsId, visibleLightDirections);
+
         context.ExecuteCommandBuffer(cameraBuffer);
         cameraBuffer.Clear();
 
@@ -91,6 +110,8 @@ public class MyPipeline : RenderPipeline
 
     public MyPipeline(bool dynamicBatching, bool instancing)
     {
+        GraphicsSettings.lightsUseLinearIntensity = true; // Change the light from Gamma space to Linear space
+
         if(dynamicBatching)
         {
             drawFlags = DrawRendererFlags.EnableDynamicBatching;
@@ -98,6 +119,20 @@ public class MyPipeline : RenderPipeline
         if (instancing)
         {
             drawFlags |= DrawRendererFlags.EnableInstancing;
+        }
+    }
+
+    void ConfigureLights()
+    {
+        for(int i = 0; i < cull.visibleLights.Count; i++)
+        {
+            VisibleLight light = cull.visibleLights[i];
+            visibleLightColors[i] = light.finalColor;
+            Vector4 v = light.localToWorld.GetColumn(2);
+            v.x = -v.x;
+            v.y = -v.y;
+            v.z = -v.z;
+            visibleLightDirections[i] = v;
         }
     }
 }
