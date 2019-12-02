@@ -16,6 +16,7 @@ public class MyPipeline : RenderPipeline
     static int visibleLightDirectionsOrPositionsId = Shader.PropertyToID("_VisibleLightDirectionsOrPositions");
     static int visibleLightAttenuationsId = Shader.PropertyToID("_VisibleLightAttenuations");
     static int visibleLightSpotDirectionsId = Shader.PropertyToID("_VisibleLightSpotDirections");
+    static int lightIndicesOffsetAndCountID = Shader.PropertyToID("unity_LightIndicesOffsetAndCount");
 
     Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
     Vector4[] visibleLightDirectionsOrPositions = new Vector4[maxVisibleLights];
@@ -45,7 +46,8 @@ public class MyPipeline : RenderPipeline
             camera.backgroundColor
         );
 
-        ConfigureLights();
+        if (cull.visibleLights.Count > 0) { ConfigureLights(); }
+        else { cameraBuffer.SetGlobalVector(lightIndicesOffsetAndCountID, Vector4.zero); }
 
         cameraBuffer.BeginSample("Render Camera");
         // Light buffer
@@ -58,7 +60,8 @@ public class MyPipeline : RenderPipeline
         cameraBuffer.Clear();
 
         //draw 
-        var drawSettings = new DrawRendererSettings(camera, new ShaderPassName("SRPDefaultUnlit")) { flags = drawFlags, rendererConfiguration = RendererConfiguration.PerObjectLightIndices8 };
+        var drawSettings = new DrawRendererSettings(camera, new ShaderPassName("SRPDefaultUnlit")) { flags = drawFlags};
+        if(cull.visibleLights.Count > 0) { drawSettings.rendererConfiguration = RendererConfiguration.PerObjectLightIndices8; }
         drawSettings.sorting.flags = SortFlags.CommonOpaque;
 
         var filterSettings = new FilterRenderersSettings(true) { renderQueueRange = RenderQueueRange.opaque };
