@@ -46,7 +46,7 @@ public class MyPipeline : RenderPipeline
         cameraBuffer.BeginSample("Render Camera");
         // Light buffer
         cameraBuffer.SetGlobalVectorArray(visibleLightColoredId, visibleLightColors);
-        cameraBuffer.SetGlobalVectorArray(visibleLightDirectionsId, visibleLightDirections);
+        cameraBuffer.SetGlobalVectorArray(visibleLightDirectionsOrPositionsId, visibleLightDirectionsOrPositions);
 
         context.ExecuteCommandBuffer(cameraBuffer);
         cameraBuffer.Clear();
@@ -134,15 +134,15 @@ public class MyPipeline : RenderPipeline
 
             if (light.lightType == LightType.Point)
             {
+                visibleLightDirectionsOrPositions[i] = light.localToWorld.GetColumn(3);
+            }
+            else
+            {
                 Vector4 v = light.localToWorld.GetColumn(2);
                 v.x = -v.x;
                 v.y = -v.y;
                 v.z = -v.z;
                 visibleLightDirectionsOrPositions[i] = v;
-            }
-            else
-            {
-                visibleLightDirectionsOrPositions[i] = light.localToWorld.GetColumn(3);
             }
         }
 
