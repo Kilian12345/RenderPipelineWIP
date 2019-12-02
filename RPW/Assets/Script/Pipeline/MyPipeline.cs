@@ -11,7 +11,7 @@ public class MyPipeline : RenderPipeline
     Material errorMaterial;
 
     //light buffer
-    const int maxVisibleLights = 4;
+    const int maxVisibleLights = 16;
     static int visibleLightColoredId = Shader.PropertyToID("_VisibleLightColors");
     static int visibleLightDirectionsOrPositionsId = Shader.PropertyToID("_VisibleLightDirectionsOrPositions");
     static int visibleLightAttenuationsId = Shader.PropertyToID("_VisibleLightAttenuations");
@@ -58,8 +58,7 @@ public class MyPipeline : RenderPipeline
         cameraBuffer.Clear();
 
         //draw 
-        var drawSettings = new DrawRendererSettings( camera, new ShaderPassName("SRPDefaultUnlit"));
-        drawSettings.flags = drawFlags;
+        var drawSettings = new DrawRendererSettings(camera, new ShaderPassName("SRPDefaultUnlit")) { flags = drawFlags, rendererConfiguration = RendererConfiguration.PerObjectLightIndices8 };
         drawSettings.sorting.flags = SortFlags.CommonOpaque;
 
         var filterSettings = new FilterRenderersSettings(true) { renderQueueRange = RenderQueueRange.opaque };

@@ -8,10 +8,12 @@ CBUFFER_START(UnityPerFrame)
 CBUFFER_END
 
 CBUFFER_START(UnityPerDraw)
-    float4x4 unity_ObjectToWorld;
+float4x4 unity_ObjectToWorld;
+float4 unity_LightIndicesOffsetAndCount;
+float4 unity_4LightIndices0, unity_4LightIndices1;
 CBUFFER_END
 
-#define MAX_VISIBLE_LIGHTS 4
+#define MAX_VISIBLE_LIGHTS 16
 
 CBUFFER_START(_LightBuffer)
 
@@ -67,6 +69,7 @@ struct VertexOutput
     float4 clipPos : SV_POSITION;
     float3 normal : TEXCOORD;
     float3 worldPos : TEXCOORD1;
+    float3 vertexLighting : TEXCOORD2;
 	UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -79,7 +82,16 @@ VertexOutput LitPassVertex(VertexInput input)
     output.clipPos = mul(unity_MatrixVP, worldPos);
     output.normal = mul((float3x3) UNITY_MATRIX_M, input.normal);
     output.worldPos = worldPos.xyz;
-    return output;
+    
+    output.vertexLighting = 0;
+
+    for (int i = 4; i < min(unity_LightIndicesOffsetAndCount.y, 8); i++)
+    {
+        int lightIndex = unity_4LightIndices1[i - 4];
+        output.vertexLighting += DiffuseLight(lightIndex, output.normal, output.worldPos);
+    }
+    
+        return output;
 }
 
 float4 LitPassFragment(VertexOutput input) : SV_TARGET
@@ -89,11 +101,13 @@ float4 LitPassFragment(VertexOutput input) : SV_TARGET
     float3 albedo = UNITY_ACCESS_INSTANCED_PROP(PerInstance, _Color).rgb;
     
     float3 diffuseLight = 0;
-    for (int i = 0; i < MAX_VISIBLE_LIGHTS; i++)
+    for (int i = 0; i < min(unity_LightIndicesOffsetAndCount.y, 4); i++)
     {
-        diffuseLight += DiffuseLight(i, input.normal, input.worldPos);
+        int lightIndex = unity_4LightIndices0[i];
+        diffuseLight += DiffuseLight(lightIndex, input.normal, input.worldPos);
     }
-        float3 color = albedo * diffuseLight;
+    
+    float3 color = albedo * diffuseLight;
     return float4(color, 1);
 }
 
