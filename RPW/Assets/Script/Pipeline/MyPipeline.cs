@@ -5,83 +5,63 @@ using Conditional = System.Diagnostics.ConditionalAttribute;
 
 public class MyPipeline : RenderPipeline
 {
-    CullResults cull;
-    CommandBuffer cameraBuffer = new CommandBuffer { name = "Render Camera" };
-
-    Material errorMaterial;
-
-    //light buffer
     const int maxVisibleLights = 16;
-    static int visibleLightColoredId = Shader.PropertyToID("_VisibleLightColors");
-    static int visibleLightDirectionsOrPositionsId = Shader.PropertyToID("_VisibleLightDirectionsOrPositions");
-    static int visibleLightAttenuationsId = Shader.PropertyToID("_VisibleLightAttenuations");
-    static int visibleLightSpotDirectionsId = Shader.PropertyToID("_VisibleLightSpotDirections");
-    static int lightIndicesOffsetAndCountID = Shader.PropertyToID("unity_LightIndicesOffsetAndCount");
+
+    static int visibleLightColorsId =
+        Shader.PropertyToID("_VisibleLightColors");
+    static int visibleLightDirectionsOrPositionsId =
+        Shader.PropertyToID("_VisibleLightDirectionsOrPositions");
+    static int visibleLightAttenuationsId =
+        Shader.PropertyToID("_VisibleLightAttenuations");
+    static int visibleLightSpotDirectionsId =
+        Shader.PropertyToID("_VisibleLightSpotDirections");
+    static int lightIndicesOffsetAndCountID =
+        Shader.PropertyToID("unity_LightIndicesOffsetAndCount");
+
+    static int shadowMapId = 
+        Shader.PropertyToID("_ShadowMap");
+    static int worldToShadowMatrixId =
+        Shader.PropertyToID("_WorldToShadowMatrix");
 
     Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
     Vector4[] visibleLightDirectionsOrPositions = new Vector4[maxVisibleLights];
     Vector4[] visibleLightAttenuations = new Vector4[maxVisibleLights];
     Vector4[] visibleLightSpotDirections = new Vector4[maxVisibleLights];
 
-    void Render(ScriptableRenderContext context, Camera camera)
+    CullResults cull;
+
+    Material errorMaterial;
+
+    CommandBuffer cameraBuffer = new CommandBuffer
     {
-        ScriptableCullingParameters cullingParameters;
-        if(!CullResults.GetCullingParameters(camera, out cullingParameters))
-        { return; }
+        name = "Render Camera"
+    };
+    CommandBuffer shadowBuffer = new CommandBuffer
+    {
+        name = "Render Shadows"
+    };
 
+    DrawRendererFlags drawFlags;
 
-#if UNITY_EDITOR
-        if (camera.cameraType == CameraType.SceneView)
-        { ScriptableRenderContext.EmitWorldGeometryForSceneView(camera); }
-#endif
+    //Shadow
+    RenderTexture shadowMap;
 
-        CullResults.Cull(ref cullingParameters, context, ref cull);
-
-
-        context.SetupCameraProperties(camera);
-        CameraClearFlags clearFlags = camera.clearFlags;
-        cameraBuffer.ClearRenderTarget(
-            (clearFlags & CameraClearFlags.Depth) != 0,
-            (clearFlags & CameraClearFlags.Color) != 0,
-            camera.backgroundColor
-        );
-
-        if (cull.visibleLights.Count > 0) { ConfigureLights(); }
-        else { cameraBuffer.SetGlobalVector(lightIndicesOffsetAndCountID, Vector4.zero); }
-
-        cameraBuffer.BeginSample("Render Camera");
-        // Light buffer
-        cameraBuffer.SetGlobalVectorArray(visibleLightColoredId, visibleLightColors);
-        cameraBuffer.SetGlobalVectorArray(visibleLightDirectionsOrPositionsId, visibleLightDirectionsOrPositions);
-        cameraBuffer.SetGlobalVectorArray(visibleLightAttenuationsId, visibleLightAttenuations);
-        cameraBuffer.SetGlobalVectorArray(visibleLightSpotDirectionsId, visibleLightSpotDirections);
-
-        context.ExecuteCommandBuffer(cameraBuffer);
-        cameraBuffer.Clear();
-
-        //draw 
-        var drawSettings = new DrawRendererSettings(camera, new ShaderPassName("SRPDefaultUnlit")) { flags = drawFlags};
-        if(cull.visibleLights.Count > 0) { drawSettings.rendererConfiguration = RendererConfiguration.PerObjectLightIndices8; }
-        drawSettings.sorting.flags = SortFlags.CommonOpaque;
-
-        var filterSettings = new FilterRenderersSettings(true) { renderQueueRange = RenderQueueRange.opaque };
-        context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-        context.DrawSkybox(camera);
-
-        drawSettings.sorting.flags = SortFlags.CommonTransparent;
-        filterSettings.renderQueueRange = RenderQueueRange.transparent;
-        context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-
-        DrawDefaultPipeline(context, camera);
-
-        cameraBuffer.EndSample("Render Camera");
-        context.ExecuteCommandBuffer(cameraBuffer);
-        cameraBuffer.Clear();
-
-        context.Submit();
+    public MyPipeline(bool dynamicBatching, bool instancing)
+    {
+        GraphicsSettings.lightsUseLinearIntensity = true;
+        if (dynamicBatching)
+        {
+            drawFlags = DrawRendererFlags.EnableDynamicBatching;
+        }
+        if (instancing)
+        {
+            drawFlags |= DrawRendererFlags.EnableInstancing;
+        }
     }
 
-    public override void Render(ScriptableRenderContext renderContext, Camera[] cameras)
+    public override void Render(
+        ScriptableRenderContext renderContext, Camera[] cameras
+    )
     {
         base.Render(renderContext, cameras);
 
@@ -91,42 +71,103 @@ public class MyPipeline : RenderPipeline
         }
     }
 
-    [Conditional("UNITY_EDITOR")]
-    void DrawDefaultPipeline(ScriptableRenderContext context, Camera camera)
+    void Render(ScriptableRenderContext context, Camera camera)
     {
-        if(errorMaterial == null)
+        ScriptableCullingParameters cullingParameters;
+        if (!CullResults.GetCullingParameters(camera, out cullingParameters))
         {
-            Shader errorShader = Shader.Find("Hidden/InternalErrorShader");
-            errorMaterial = new Material(errorShader) { hideFlags = HideFlags.HideAndDontSave};
+            return;
         }
 
-        var drawSettings = new DrawRendererSettings(camera, new ShaderPassName("ForwardBase"));
-
-        drawSettings.SetShaderPassName(1, new ShaderPassName("PrepassBase"));
-        drawSettings.SetShaderPassName(2, new ShaderPassName("Always"));
-        drawSettings.SetShaderPassName(3, new ShaderPassName("Vertex"));
-        drawSettings.SetShaderPassName(4, new ShaderPassName("VertexLMRGBM"));
-        drawSettings.SetShaderPassName(5, new ShaderPassName("VertexLM"));
-        drawSettings.SetOverrideMaterial(errorMaterial, 0);
-
-        var filterSettings = new FilterRenderersSettings(true);
-
-        context.DrawRenderers(cull.visibleRenderers, ref drawSettings, filterSettings);
-    }
-
-    DrawRendererFlags drawFlags;
-
-    public MyPipeline(bool dynamicBatching, bool instancing)
-    {
-        GraphicsSettings.lightsUseLinearIntensity = true; // Change the light from Gamma space to Linear space
-
-        if(dynamicBatching)
+#if UNITY_EDITOR
+        if (camera.cameraType == CameraType.SceneView)
         {
-            drawFlags = DrawRendererFlags.EnableDynamicBatching;
+            ScriptableRenderContext.EmitWorldGeometryForSceneView(camera);
         }
-        if (instancing)
+#endif
+
+        CullResults.Cull(ref cullingParameters, context, ref cull);
+
+        RenderShadows(context);
+
+        context.SetupCameraProperties(camera);
+
+        CameraClearFlags clearFlags = camera.clearFlags;
+        cameraBuffer.ClearRenderTarget(
+            (clearFlags & CameraClearFlags.Depth) != 0,
+            (clearFlags & CameraClearFlags.Color) != 0,
+            camera.backgroundColor
+        );
+
+        if (cull.visibleLights.Count > 0)
         {
-            drawFlags |= DrawRendererFlags.EnableInstancing;
+            ConfigureLights();
+        }
+        else
+        {
+            cameraBuffer.SetGlobalVector(
+                lightIndicesOffsetAndCountID, Vector4.zero
+            );
+        }
+
+        cameraBuffer.BeginSample("Render Camera");
+        cameraBuffer.SetGlobalVectorArray(
+            visibleLightColorsId, visibleLightColors
+        );
+        cameraBuffer.SetGlobalVectorArray(
+            visibleLightDirectionsOrPositionsId, visibleLightDirectionsOrPositions
+        );
+        cameraBuffer.SetGlobalVectorArray(
+            visibleLightAttenuationsId, visibleLightAttenuations
+        );
+        cameraBuffer.SetGlobalVectorArray(
+            visibleLightSpotDirectionsId, visibleLightSpotDirections
+        );
+        context.ExecuteCommandBuffer(cameraBuffer);
+        cameraBuffer.Clear();
+
+        var drawSettings = new DrawRendererSettings(
+            camera, new ShaderPassName("SRPDefaultUnlit")
+        )
+        {
+            flags = drawFlags
+        };
+        if (cull.visibleLights.Count > 0)
+        {
+            drawSettings.rendererConfiguration =
+                RendererConfiguration.PerObjectLightIndices8;
+        }
+        drawSettings.sorting.flags = SortFlags.CommonOpaque;
+
+        var filterSettings = new FilterRenderersSettings(true)
+        {
+            renderQueueRange = RenderQueueRange.opaque
+        };
+
+        context.DrawRenderers(
+            cull.visibleRenderers, ref drawSettings, filterSettings
+        );
+
+        context.DrawSkybox(camera);
+
+        drawSettings.sorting.flags = SortFlags.CommonTransparent;
+        filterSettings.renderQueueRange = RenderQueueRange.transparent;
+        context.DrawRenderers(
+            cull.visibleRenderers, ref drawSettings, filterSettings
+        );
+
+        DrawDefaultPipeline(context, camera);
+
+        cameraBuffer.EndSample("Render Camera");
+        context.ExecuteCommandBuffer(cameraBuffer);
+        cameraBuffer.Clear();
+
+        context.Submit();
+
+        if(shadowMap)
+        {
+            RenderTexture.ReleaseTemporary(shadowMap);
+            shadowMap = null;
         }
     }
 
@@ -189,5 +230,76 @@ public class MyPipeline : RenderPipeline
             }
             cull.SetLightIndexMap(lightIndices);
         }
+    }
+
+    [Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]
+    void DrawDefaultPipeline(ScriptableRenderContext context, Camera camera)
+    {
+        if (errorMaterial == null)
+        {
+            Shader errorShader = Shader.Find("Hidden/InternalErrorShader");
+            errorMaterial = new Material(errorShader)
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+        }
+
+        var drawSettings = new DrawRendererSettings(
+            camera, new ShaderPassName("ForwardBase")
+        );
+        drawSettings.SetShaderPassName(1, new ShaderPassName("PrepassBase"));
+        drawSettings.SetShaderPassName(2, new ShaderPassName("Always"));
+        drawSettings.SetShaderPassName(3, new ShaderPassName("Vertex"));
+        drawSettings.SetShaderPassName(4, new ShaderPassName("VertexLMRGBM"));
+        drawSettings.SetShaderPassName(5, new ShaderPassName("VertexLM"));
+        drawSettings.SetOverrideMaterial(errorMaterial, 0);
+
+        var filterSettings = new FilterRenderersSettings(true);
+
+        context.DrawRenderers(
+            cull.visibleRenderers, ref drawSettings, filterSettings
+        );
+    }
+
+    void RenderShadows (ScriptableRenderContext context)
+    {
+        shadowMap = RenderTexture.GetTemporary(512, 512, 16, RenderTextureFormat.Shadowmap);
+        shadowMap.filterMode = FilterMode.Bilinear;
+        shadowMap.wrapMode = TextureWrapMode.Clamp;
+
+        CoreUtils.SetRenderTarget(shadowBuffer, shadowMap, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, ClearFlag.Depth);
+        //Buffer (command happen between these two)
+        shadowBuffer.BeginSample("Render Shadows");
+        context.ExecuteCommandBuffer(shadowBuffer);
+        shadowBuffer.Clear();
+
+        Matrix4x4 viewMatrix, projectionMatrix;
+        ShadowSplitData splitData;
+        cull.ComputeSpotShadowMatricesAndCullingPrimitives(0, out viewMatrix, out projectionMatrix, out splitData);
+
+        shadowBuffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
+        context.ExecuteCommandBuffer(shadowBuffer);
+        shadowBuffer.Clear();
+
+        var shadowSettings = new DrawShadowsSettings(cull, 0);
+        context.DrawShadows(ref shadowSettings);
+
+        if(SystemInfo.usesReversedZBuffer)
+        {
+            projectionMatrix.m20 = -projectionMatrix.m20;
+            projectionMatrix.m21 = -projectionMatrix.m21;
+            projectionMatrix.m22 = -projectionMatrix.m22;
+            projectionMatrix.m23 = -projectionMatrix.m23;
+        }
+
+        var scaleOffset = Matrix4x4.identity;
+        scaleOffset.m00 = scaleOffset.m11 = scaleOffset.m22 = 0.5f;
+        scaleOffset.m03 = scaleOffset.m13 = scaleOffset.m23 = 0.5f;
+        Matrix4x4 worldToShadowMatrix = scaleOffset * (projectionMatrix * viewMatrix);
+        shadowBuffer.SetGlobalMatrix(worldToShadowMatrixId, worldToShadowMatrix);
+        shadowBuffer.SetGlobalTexture(shadowMapId, shadowMap);
+        shadowBuffer.EndSample("Render Shadows");
+        context.ExecuteCommandBuffer(shadowBuffer);
+        shadowBuffer.Clear();
     }
 }
