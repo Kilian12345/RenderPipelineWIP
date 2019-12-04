@@ -22,6 +22,8 @@ public class MyPipeline : RenderPipeline
         Shader.PropertyToID("_ShadowMap");
     static int worldToShadowMatrixId =
         Shader.PropertyToID("_WorldToShadowMatrix");
+    static int shadowBiasId = 
+        Shader.PropertyToID("_ShadowBias");
 
     Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
     Vector4[] visibleLightDirectionsOrPositions = new Vector4[maxVisibleLights];
@@ -45,8 +47,9 @@ public class MyPipeline : RenderPipeline
 
     //Shadow
     RenderTexture shadowMap;
+    int shadowMapSize;
 
-    public MyPipeline(bool dynamicBatching, bool instancing)
+    public MyPipeline(bool dynamicBatching, bool instancing, int shadowMapSize)
     {
         GraphicsSettings.lightsUseLinearIntensity = true;
         if (dynamicBatching)
@@ -57,6 +60,8 @@ public class MyPipeline : RenderPipeline
         {
             drawFlags |= DrawRendererFlags.EnableInstancing;
         }
+
+        this.shadowMapSize = shadowMapSize;
     }
 
     public override void Render(
@@ -263,7 +268,7 @@ public class MyPipeline : RenderPipeline
 
     void RenderShadows (ScriptableRenderContext context)
     {
-        shadowMap = RenderTexture.GetTemporary(512, 512, 16, RenderTextureFormat.Shadowmap);
+        shadowMap = RenderTexture.GetTemporary(shadowMapSize, shadowMapSize, 16, RenderTextureFormat.Shadowmap);
         shadowMap.filterMode = FilterMode.Bilinear;
         shadowMap.wrapMode = TextureWrapMode.Clamp;
 
