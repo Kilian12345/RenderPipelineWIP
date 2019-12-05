@@ -2,6 +2,7 @@
 #define MYRP_LIT_INCLUDED
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Shadow/ShadowSamplingTent.hlsl"
 
 CBUFFER_START(UnityPerFrame)
 float4x4 unity_MatrixVP;
@@ -26,6 +27,8 @@ CBUFFER_END
 
 CBUFFER_START(_ShadowBuffer)
 float4x4 _WorldToShadowMatrix;
+float4 _ShadowStrength;
+float4 _ShadowMapSize;
 CBUFFER_END
 
 TEXTURE2D_SHADOW(_ShadowMap);
@@ -35,7 +38,23 @@ float ShadowAttenuation (float3 worldPos)
 {
     float4 shadowPos = mul(_WorldToShadowMatrix, float4(worldPos, 1.0));
     shadowPos.xyz /= shadowPos.w;
-    return SAMPLE_TEXTURE2D_SHADOW(_ShadowMap, sampler_ShadowMap, shadowPos.xyz);
+    float attenuation = SAMPLE_TEXTURE2D_SHADOW(_ShadowMap, sampler_ShadowMap, shadowPos.xyz);
+    
+    #if defined(_SHADOWS_SOFT)
+		real tentWeights[9];
+		real2 tentUVs[9];
+		SampleShadow_ComputeSamples_Tent_5x5(
+			_ShadowMapSize, shadowPos.xy, tentWeights, tentUVs
+		);
+		attenuation = 0;
+		for (int i = 0; i < 9; i++) {
+			attenuation += tentWeights[i] * SAMPLE_TEXTURE2D_SHADOW(
+				_ShadowMap, sampler_ShadowMap, float3(tentUVs[i].xy, shadowPos.z)
+			);
+		}
+	#endif
+    
+    return lerp(1, attenuation, _ShadowStrength + 0.8); // Shadow Strength
 }
 
 float3 DiffuseLight(int index, float3 normal, float3 worldPos, float4 shadowAttenuation)

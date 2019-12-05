@@ -24,13 +24,20 @@ public class MyPipeline : RenderPipeline
         Shader.PropertyToID("_WorldToShadowMatrix");
     static int shadowBiasId = 
         Shader.PropertyToID("_ShadowBias");
+    static int shadowStrengthId =
+        Shader.PropertyToID("_ShadowStrength");
+    static int shadowMapSizeId =
+        Shader.PropertyToID("_ShadowMapSize");
+
+    const string shadowsSoftKeyword = "_SHADOWS_SOFT";
 
     Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
     Vector4[] visibleLightDirectionsOrPositions = new Vector4[maxVisibleLights];
     Vector4[] visibleLightAttenuations = new Vector4[maxVisibleLights];
     Vector4[] visibleLightSpotDirections = new Vector4[maxVisibleLights];
+    Vector4[] shadowData = new Vector4[maxVisibleLights];
 
-    CullResults cull;
+        CullResults cull;
 
     Material errorMaterial;
 
@@ -92,8 +99,16 @@ public class MyPipeline : RenderPipeline
 #endif
 
         CullResults.Cull(ref cullingParameters, context, ref cull);
-
-        RenderShadows(context);
+        if (cull.visibleLights.Count > 0)
+        {
+            ConfigureLights();
+            RenderShadows(context);
+        }
+        else
+        {
+            cameraBuffer.SetGlobalVector(lightIndicesOffsetAndCountID, Vector4.zero);
+        }
+        ConfigureLights();
 
         context.SetupCameraProperties(camera);
 
@@ -103,17 +118,6 @@ public class MyPipeline : RenderPipeline
             (clearFlags & CameraClearFlags.Color) != 0,
             camera.backgroundColor
         );
-
-        if (cull.visibleLights.Count > 0)
-        {
-            ConfigureLights();
-        }
-        else
-        {
-            cameraBuffer.SetGlobalVector(
-                lightIndicesOffsetAndCountID, Vector4.zero
-            );
-        }
 
         cameraBuffer.BeginSample("Render Camera");
         cameraBuffer.SetGlobalVectorArray(
@@ -188,6 +192,7 @@ public class MyPipeline : RenderPipeline
             visibleLightColors[i] = light.finalColor;
             Vector4 attenuation = Vector4.zero;
             attenuation.w = 1f;
+            Vector4 shadow = Vector4.zero;
 
             if (light.lightType == LightType.Directional)
             {
@@ -220,10 +225,14 @@ public class MyPipeline : RenderPipeline
                     float angleRange = Mathf.Max(innerCos - outerCos, 0.001f);
                     attenuation.z = 1f / angleRange;
                     attenuation.w = -outerCos * attenuation.z;
+
+                    Light shadowLight = light.light;
+                    if(shadowLight.shadows != LightShadows.None) { shadow.x = shadowLight.shadowStrength; }
                 }
             }
 
             visibleLightAttenuations[i] = attenuation;
+            shadowData[i] = shadow;
         }
 
         if (cull.visibleLights.Count > maxVisibleLights)
@@ -283,6 +292,8 @@ public class MyPipeline : RenderPipeline
         cull.ComputeSpotShadowMatricesAndCullingPrimitives(0, out viewMatrix, out projectionMatrix, out splitData);
 
         shadowBuffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
+        shadowBuffer.SetGlobalFloat(shadowBiasId, cull.visibleLights[0].light.shadowBias);
+        shadowBuffer.SetGlobalFloat(shadowStrengthId, cull.visibleLights[0].light.shadowStrength);
         context.ExecuteCommandBuffer(shadowBuffer);
         shadowBuffer.Clear();
 
@@ -303,6 +314,27 @@ public class MyPipeline : RenderPipeline
         Matrix4x4 worldToShadowMatrix = scaleOffset * (projectionMatrix * viewMatrix);
         shadowBuffer.SetGlobalMatrix(worldToShadowMatrixId, worldToShadowMatrix);
         shadowBuffer.SetGlobalTexture(shadowMapId, shadowMap);
+
+        float invShadowMapSize = 1f / shadowMapSize;
+        shadowBuffer.SetGlobalVector(
+            shadowMapSizeId, new Vector4(
+                invShadowMapSize, invShadowMapSize, shadowMapSize, shadowMapSize
+            )
+        );
+
+        /*if(cull.visibleLights[0].light.shadows == LightShadows.Soft)
+        {
+            shadowBuffer.EnableShaderKeyword(shadowsSoftKeyword);
+        }
+        else
+        {
+            shadowBuffer.DisableShaderKeyword(shadowsSoftKeyword);
+        }*/
+        CoreUtils.SetKeyword(
+            shadowBuffer, shadowsSoftKeyword,
+            cull.visibleLights[0].light.shadows == LightShadows.Soft
+        );
+
         shadowBuffer.EndSample("Render Shadows");
         context.ExecuteCommandBuffer(shadowBuffer);
         shadowBuffer.Clear();
