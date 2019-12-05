@@ -227,7 +227,12 @@ public class MyPipeline : RenderPipeline
                     attenuation.w = -outerCos * attenuation.z;
 
                     Light shadowLight = light.light;
-                    if(shadowLight.shadows != LightShadows.None) { shadow.x = shadowLight.shadowStrength; }
+                    Bounds shadowBounds;
+                    if(shadowLight.shadows != LightShadows.None && cull.GetShadowCasterBounds(i, out shadowBounds))
+                    {
+                        shadow.x = shadowLight.shadowStrength;
+                        shadow.y = shadowLight.shadows == LightShadows.Soft ? 1f : 2f;
+                    }
                 }
             }
 
