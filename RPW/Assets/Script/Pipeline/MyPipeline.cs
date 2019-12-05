@@ -5,7 +5,11 @@ using Conditional = System.Diagnostics.ConditionalAttribute;
 
 public class MyPipeline : RenderPipeline
 {
+
     const int maxVisibleLights = 16;
+
+    const string shadowsHardKeyword = "_SHADOWS_HARD";
+    const string shadowsSoftKeyword = "_SHADOWS_SOFT";
 
     static int visibleLightColorsId =
         Shader.PropertyToID("_VisibleLightColors");
@@ -17,29 +21,23 @@ public class MyPipeline : RenderPipeline
         Shader.PropertyToID("_VisibleLightSpotDirections");
     static int lightIndicesOffsetAndCountID =
         Shader.PropertyToID("unity_LightIndicesOffsetAndCount");
-
-    static int shadowMapId = 
-        Shader.PropertyToID("_ShadowMap");
+    static int shadowMapId = Shader.PropertyToID("_ShadowMap");
     static int worldToShadowMatricesId =
         Shader.PropertyToID("_WorldToShadowMatrices");
-    static int shadowBiasId = 
-        Shader.PropertyToID("_ShadowBias");
-    static int shadowDataId =
-        Shader.PropertyToID("_ShadowData");
-    static int shadowMapSizeId =
-        Shader.PropertyToID("_ShadowMapSize");
-
-    const string shadowsSoftKeyword = "_SHADOWS_SOFT";
+    static int shadowBiasId = Shader.PropertyToID("_ShadowBias");
+    static int shadowDataId = Shader.PropertyToID("_ShadowData");
+    static int shadowMapSizeId = Shader.PropertyToID("_ShadowMapSize");
 
     Vector4[] visibleLightColors = new Vector4[maxVisibleLights];
     Vector4[] visibleLightDirectionsOrPositions = new Vector4[maxVisibleLights];
     Vector4[] visibleLightAttenuations = new Vector4[maxVisibleLights];
     Vector4[] visibleLightSpotDirections = new Vector4[maxVisibleLights];
 
+    CullResults cull;
+
+    RenderTexture shadowMap;
     Vector4[] shadowData = new Vector4[maxVisibleLights];
     Matrix4x4[] worldToShadowMatrices = new Matrix4x4[maxVisibleLights];
-
-    CullResults cull;
 
     Material errorMaterial;
 
@@ -47,6 +45,7 @@ public class MyPipeline : RenderPipeline
     {
         name = "Render Camera"
     };
+
     CommandBuffer shadowBuffer = new CommandBuffer
     {
         name = "Render Shadows"
@@ -54,11 +53,12 @@ public class MyPipeline : RenderPipeline
 
     DrawRendererFlags drawFlags;
 
-    //Shadow
-    RenderTexture shadowMap;
     int shadowMapSize;
+    int shadowTileCount;
 
-    public MyPipeline(bool dynamicBatching, bool instancing, int shadowMapSize)
+    public MyPipeline(
+        bool dynamicBatching, bool instancing, int shadowMapSize
+    )
     {
         GraphicsSettings.lightsUseLinearIntensity = true;
         if (dynamicBatching)
@@ -69,7 +69,6 @@ public class MyPipeline : RenderPipeline
         {
             drawFlags |= DrawRendererFlags.EnableInstancing;
         }
-
         this.shadowMapSize = shadowMapSize;
     }
 
@@ -104,13 +103,24 @@ public class MyPipeline : RenderPipeline
         if (cull.visibleLights.Count > 0)
         {
             ConfigureLights();
-            RenderShadows(context);
+            if (shadowTileCount > 0)
+            {
+                RenderShadows(context);
+            }
+            else
+            {
+                cameraBuffer.DisableShaderKeyword(shadowsHardKeyword);
+                cameraBuffer.DisableShaderKeyword(shadowsSoftKeyword);
+            }
         }
         else
         {
-            cameraBuffer.SetGlobalVector(lightIndicesOffsetAndCountID, Vector4.zero);
+            cameraBuffer.SetGlobalVector(
+                lightIndicesOffsetAndCountID, Vector4.zero
+            );
+            cameraBuffer.DisableShaderKeyword(shadowsHardKeyword);
+            cameraBuffer.DisableShaderKeyword(shadowsSoftKeyword);
         }
-        ConfigureLights();
 
         context.SetupCameraProperties(camera);
 
@@ -175,7 +185,7 @@ public class MyPipeline : RenderPipeline
 
         context.Submit();
 
-        if(shadowMap)
+        if (shadowMap)
         {
             RenderTexture.ReleaseTemporary(shadowMap);
             shadowMap = null;
@@ -184,6 +194,7 @@ public class MyPipeline : RenderPipeline
 
     void ConfigureLights()
     {
+        shadowTileCount = 0;
         for (int i = 0; i < cull.visibleLights.Count; i++)
         {
             if (i == maxVisibleLights)
@@ -230,10 +241,15 @@ public class MyPipeline : RenderPipeline
 
                     Light shadowLight = light.light;
                     Bounds shadowBounds;
-                    if(shadowLight.shadows != LightShadows.None && cull.GetShadowCasterBounds(i, out shadowBounds))
+                    if (
+                        shadowLight.shadows != LightShadows.None &&
+                        cull.GetShadowCasterBounds(i, out shadowBounds)
+                    )
                     {
+                        shadowTileCount += 1;
                         shadow.x = shadowLight.shadowStrength;
-                        shadow.y = shadowLight.shadows == LightShadows.Soft ? 1f : 2f;
+                        shadow.y =
+                            shadowLight.shadows == LightShadows.Soft ? 1f : 0f;
                     }
                 }
             }
@@ -251,6 +267,145 @@ public class MyPipeline : RenderPipeline
             }
             cull.SetLightIndexMap(lightIndices);
         }
+    }
+
+    void RenderShadows(ScriptableRenderContext context)
+    {
+        int split;
+        if (shadowTileCount <= 1)
+        {
+            split = 1;
+        }
+        else if (shadowTileCount <= 4)
+        {
+            split = 2;
+        }
+        else if (shadowTileCount <= 9)
+        {
+            split = 3;
+        }
+        else
+        {
+            split = 4;
+        }
+
+        float tileSize = shadowMapSize / split;
+        float tileScale = 1f / split;
+        Rect tileViewport = new Rect(0f, 0f, tileSize, tileSize);
+
+        shadowMap = RenderTexture.GetTemporary(
+            shadowMapSize, shadowMapSize, 16, RenderTextureFormat.Shadowmap
+        );
+        shadowMap.filterMode = FilterMode.Bilinear;
+        shadowMap.wrapMode = TextureWrapMode.Clamp;
+
+        CoreUtils.SetRenderTarget(
+            shadowBuffer, shadowMap,
+            RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store,
+            ClearFlag.Depth
+        );
+        shadowBuffer.BeginSample("Render Shadows");
+        context.ExecuteCommandBuffer(shadowBuffer);
+        shadowBuffer.Clear();
+
+        int tileIndex = 0;
+        bool hardShadows = false;
+        bool softShadows = false;
+        for (int i = 0; i < cull.visibleLights.Count; i++)
+        {
+            if (i == maxVisibleLights)
+            {
+                break;
+            }
+            if (shadowData[i].x <= 0f)
+            {
+                continue;
+            }
+
+            Matrix4x4 viewMatrix, projectionMatrix;
+            ShadowSplitData splitData;
+            if (!cull.ComputeSpotShadowMatricesAndCullingPrimitives(
+                i, out viewMatrix, out projectionMatrix, out splitData
+            ))
+            {
+                shadowData[i].x = 0f;
+                continue;
+            }
+
+            float tileOffsetX = tileIndex % split;
+            float tileOffsetY = tileIndex / split;
+            tileViewport.x = tileOffsetX * tileSize;
+            tileViewport.y = tileOffsetY * tileSize;
+            if (split > 1)
+            {
+                shadowBuffer.SetViewport(tileViewport);
+                shadowBuffer.EnableScissorRect(new Rect(
+                    tileViewport.x + 4f, tileViewport.y + 4f,
+                    tileSize - 8f, tileSize - 8f
+                ));
+            }
+            shadowBuffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
+            shadowBuffer.SetGlobalFloat(
+                shadowBiasId, cull.visibleLights[i].light.shadowBias
+            );
+            context.ExecuteCommandBuffer(shadowBuffer);
+            shadowBuffer.Clear();
+
+            var shadowSettings = new DrawShadowsSettings(cull, i);
+            context.DrawShadows(ref shadowSettings);
+
+            if (SystemInfo.usesReversedZBuffer)
+            {
+                projectionMatrix.m20 = -projectionMatrix.m20;
+                projectionMatrix.m21 = -projectionMatrix.m21;
+                projectionMatrix.m22 = -projectionMatrix.m22;
+                projectionMatrix.m23 = -projectionMatrix.m23;
+            }
+            var scaleOffset = Matrix4x4.identity;
+            scaleOffset.m00 = scaleOffset.m11 = scaleOffset.m22 = 0.5f;
+            scaleOffset.m03 = scaleOffset.m13 = scaleOffset.m23 = 0.5f;
+            worldToShadowMatrices[i] =
+                scaleOffset * (projectionMatrix * viewMatrix);
+
+            if (split > 1)
+            {
+                var tileMatrix = Matrix4x4.identity;
+                tileMatrix.m00 = tileMatrix.m11 = tileScale;
+                tileMatrix.m03 = tileOffsetX * tileScale;
+                tileMatrix.m13 = tileOffsetY * tileScale;
+                worldToShadowMatrices[i] = tileMatrix * worldToShadowMatrices[i];
+            }
+            tileIndex += 1;
+            if (shadowData[i].y <= 0f)
+            {
+                hardShadows = true;
+            }
+            else
+            {
+                softShadows = true;
+            }
+        }
+
+        if (split > 1)
+        {
+            shadowBuffer.DisableScissorRect();
+        }
+        shadowBuffer.SetGlobalTexture(shadowMapId, shadowMap);
+        shadowBuffer.SetGlobalMatrixArray(
+            worldToShadowMatricesId, worldToShadowMatrices
+        );
+        shadowBuffer.SetGlobalVectorArray(shadowDataId, shadowData);
+        float invShadowMapSize = 1f / shadowMapSize;
+        shadowBuffer.SetGlobalVector(
+            shadowMapSizeId, new Vector4(
+                invShadowMapSize, invShadowMapSize, shadowMapSize, shadowMapSize
+            )
+        );
+        CoreUtils.SetKeyword(shadowBuffer, shadowsHardKeyword, hardShadows);
+        CoreUtils.SetKeyword(shadowBuffer, shadowsSoftKeyword, softShadows);
+        shadowBuffer.EndSample("Render Shadows");
+        context.ExecuteCommandBuffer(shadowBuffer);
+        shadowBuffer.Clear();
     }
 
     [Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]
@@ -280,103 +435,5 @@ public class MyPipeline : RenderPipeline
         context.DrawRenderers(
             cull.visibleRenderers, ref drawSettings, filterSettings
         );
-    }
-
-    void RenderShadows (ScriptableRenderContext context)
-    {
-        float tileSize = shadowMapSize / 4;
-        Rect tileViewport = new Rect(0, 0, tileSize, tileSize);
-
-        shadowMap = RenderTexture.GetTemporary(shadowMapSize, shadowMapSize, 16, RenderTextureFormat.Shadowmap);
-        shadowMap.filterMode = FilterMode.Bilinear;
-        shadowMap.wrapMode = TextureWrapMode.Clamp;
-
-        CoreUtils.SetRenderTarget(shadowBuffer, shadowMap, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, ClearFlag.Depth);
-        //Buffer (command happen between these two)
-        shadowBuffer.BeginSample("Render Shadows");
-        context.ExecuteCommandBuffer(shadowBuffer);
-        shadowBuffer.Clear();
-
-        for (int i = 0; i < cull.visibleLights.Count; i++)
-        {
-            if (i == maxVisibleLights)
-            {
-                break;
-            }
-            if(shadowData[i].x <= 0f)
-            {
-                continue;
-            }
-
-
-            Matrix4x4 viewMatrix, projectionMatrix;
-            ShadowSplitData splitData;
-
-            if(!cull.ComputeSpotShadowMatricesAndCullingPrimitives(i, out viewMatrix, out projectionMatrix, out splitData))
-            {
-                shadowData[i].x = 0f;
-                continue;
-            }
-
-            float tileOffsetX = i % 4;
-            float tileOffsetY = i / 4;
-            tileViewport.x = tileOffsetX * tileSize;
-            tileViewport.y = tileOffsetY * tileSize;
-
-            shadowBuffer.SetViewport(tileViewport);
-            shadowBuffer.EnableScissorRect(new Rect(
-                tileViewport.x + 4f, tileViewport.y + 4f,
-                tileSize - 8f, tileSize - 8f
-            ));
-
-            shadowBuffer.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
-            shadowBuffer.SetGlobalFloat(shadowBiasId, cull.visibleLights[i].light.shadowBias);
-            context.ExecuteCommandBuffer(shadowBuffer);
-            shadowBuffer.Clear();
-
-            var shadowSettings = new DrawShadowsSettings(cull, i);
-            context.DrawShadows(ref shadowSettings);
-
-            if (SystemInfo.usesReversedZBuffer)
-            {
-                projectionMatrix.m20 = -projectionMatrix.m20;
-                projectionMatrix.m21 = -projectionMatrix.m21;
-                projectionMatrix.m22 = -projectionMatrix.m22;
-                projectionMatrix.m23 = -projectionMatrix.m23;
-            }
-
-            var scaleOffset = Matrix4x4.identity;
-            scaleOffset.m00 = scaleOffset.m11 = scaleOffset.m22 = 0.5f;
-            scaleOffset.m03 = scaleOffset.m13 = scaleOffset.m23 = 0.5f;
-            worldToShadowMatrices[i] = scaleOffset * (projectionMatrix * viewMatrix);
-        }
-
-        shadowBuffer.SetGlobalTexture(shadowMapId, shadowMap);
-        shadowBuffer.SetGlobalMatrixArray(worldToShadowMatricesId, worldToShadowMatrices);
-        shadowBuffer.SetGlobalVectorArray(shadowDataId, shadowData);
-
-        float invShadowMapSize = 1f / shadowMapSize;
-        shadowBuffer.SetGlobalVector(
-            shadowMapSizeId, new Vector4(
-                invShadowMapSize, invShadowMapSize, shadowMapSize, shadowMapSize
-            )
-        );
-
-        /*if(cull.visibleLights[0].light.shadows == LightShadows.Soft)
-        {
-            shadowBuffer.EnableShaderKeyword(shadowsSoftKeyword);
-        }
-        else
-        {
-            shadowBuffer.DisableShaderKeyword(shadowsSoftKeyword);
-        }*/
-        CoreUtils.SetKeyword(
-            shadowBuffer, shadowsSoftKeyword,
-            cull.visibleLights[0].light.shadows == LightShadows.Soft
-        );
-
-        shadowBuffer.EndSample("Render Shadows");
-        context.ExecuteCommandBuffer(shadowBuffer);
-        shadowBuffer.Clear();
     }
 }
