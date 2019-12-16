@@ -219,7 +219,7 @@ public class MyPipeline : RenderPipeline
                 Bounds shadowBounds;
                 if (
                     shadowLight.shadows != LightShadows.None &&
-                    cull.GetShadowCasterBounds(i, out shadowBounds)
+                    cull.Get(i, out shadowBounds)
                 )
                 {
                     shadowTileCount += 1;
@@ -251,6 +251,7 @@ public class MyPipeline : RenderPipeline
                     float angleRange = Mathf.Max(innerCos - outerCos, 0.001f);
                     attenuation.z = 1f / angleRange;
                     attenuation.w = -outerCos * attenuation.z;
+
 
                     Light shadowLight = light.light;
                     Bounds shadowBounds;
