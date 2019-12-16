@@ -215,7 +215,6 @@ public class MyPipeline : RenderPipeline
                 v.z = -v.z;
                 visibleLightDirectionsOrPositions[i] = v;
 
-
                 Light shadowLight = light.light;
                 Bounds shadowBounds;
                 if (
