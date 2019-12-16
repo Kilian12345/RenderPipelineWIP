@@ -214,6 +214,20 @@ public class MyPipeline : RenderPipeline
                 v.y = -v.y;
                 v.z = -v.z;
                 visibleLightDirectionsOrPositions[i] = v;
+
+
+                Light shadowLight = light.light;
+                Bounds shadowBounds;
+                if (
+                    shadowLight.shadows != LightShadows.None &&
+                    cull.GetShadowCasterBounds(i, out shadowBounds)
+                )
+                {
+                    shadowTileCount += 1;
+                    shadow.x = shadowLight.shadowStrength;
+                    shadow.y =
+                        shadowLight.shadows == LightShadows.Soft ? 1f : 0f;
+                }
             }
             else
             {

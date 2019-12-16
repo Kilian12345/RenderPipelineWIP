@@ -176,7 +176,7 @@ float4 LitPassFragment(VertexOutput input) : SV_TARGET
 			lightIndex, input.normal, input.worldPos, shadowAttenuation
 		);
     }
-    float3 color = diffuseLight * albedo;
+    float3 color = step(0.5, diffuseLight) /* albedo*/;
     return float4(color, 1);
 }
 
