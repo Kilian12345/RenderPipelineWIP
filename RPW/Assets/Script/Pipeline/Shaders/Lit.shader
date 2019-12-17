@@ -1,51 +1,49 @@
-﻿Shader "My Pipeline/Lit"{
+﻿Shader "My Pipeline/Lit" {
 
 	Properties{
-		_Color("Color", Color) = (1, 1 ,1 ,1)
+		_Color("Color", Color) = (1, 1, 1, 1)
 	}
 
-	SubShader{
+		SubShader{
 
-		Pass 
-		{
-			HLSLPROGRAM
+			Pass {
+				HLSLPROGRAM
 
-			#pragma target 3.5
+				#pragma target 3.5
 
-			#pragma multi_compile_instancing
-			#pragma instancing_options_assumeuniformscaling
+				#pragma multi_compile_instancing
+				#pragma instancing_options assumeuniformscaling
 
-			#pragma multi_compile _ _SHADOWS_SOFT
-			#pragma multi_compile _ _SHADOWS_HARD
+				#pragma multi_compile _ _CASCADED_SHADOWS_HARD _CASCADED_SHADOWS_SOFT
+				#pragma multi_compile _ _SHADOWS_HARD
+				#pragma multi_compile _ _SHADOWS_SOFT
 
-			#pragma vertex LitPassVertex
-			#pragma fragment LitPassFragment
+				#pragma vertex LitPassVertex
+				#pragma fragment LitPassFragment
 
-			#include "../ShaderLibrary/Lit.hlsl"
+				#include "../ShaderLibrary/Lit.hlsl"
 
-			ENDHLSL
-		}
-
-		Pass
-		{
-			Tags 
-			{
-				"LightMode" = "ShadowCaster"
+				ENDHLSL
 			}
 
-			HLSLPROGRAM
+			Pass {
+				Tags {
+					"LightMode" = "ShadowCaster"
+				}
 
-			#pragma target 3.5
+				HLSLPROGRAM
 
-			#pragma multi_compile_instancing
-			#pragma instancing_options_assumeuniformscaling
+				#pragma target 3.5
 
-			#pragma vertex ShadowCasterPassVertex
-			#pragma fragment ShadowCasterPassFragment
+				#pragma multi_compile_instancing
+				#pragma instancing_options assumeuniformscaling
 
-			#include "../ShaderLibrary/ShadowCaster.hlsl"
+				#pragma vertex ShadowCasterPassVertex
+				#pragma fragment ShadowCasterPassFragment
 
-			ENDHLSL
-		}
+				#include "../ShaderLibrary/ShadowCaster.hlsl"
+
+				ENDHLSL
+			}
 	}
 }
