@@ -204,9 +204,9 @@ float3 DiffuseLight(
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/UnityInstancing.hlsl"
 
-UNITY_INSTANCING_BUFFER_START(PerInstance)
-	UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
-UNITY_INSTANCING_BUFFER_END(PerInstance)
+//UNITY_INSTANCING_BUFFER_START(PerInstance)
+//	UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
+//UNITY_INSTANCING_BUFFER_END(PerInstance)
 
 struct VertexInput
 {
@@ -249,7 +249,7 @@ float4 LitPassFragment(VertexOutput input) : SV_TARGET
 {
     UNITY_SETUP_INSTANCE_ID(input);
     input.normal = normalize(input.normal);
-    float3 albedo = UNITY_ACCESS_INSTANCED_PROP(PerInstance, _Color).rgb;
+    //float3 albedo = UNITY_ACCESS_INSTANCED_PROP(PerInstance, _Color).rgb;
 	
     float3 diffuseLight = input.vertexLighting;
 #if defined(_CASCADED_SHADOWS_HARD) || defined(_CASCADED_SHADOWS_SOFT)
@@ -264,7 +264,7 @@ float4 LitPassFragment(VertexOutput input) : SV_TARGET
 			lightIndex, input.normal, input.worldPos, shadowAttenuation
 		);
     }
-    float3 color = step(0.001, diffuseLight) /* albedo*/;
+    float3 color = step(0.001, diffuseLight) /* albedoalbedo*/;
     return float4(color, 1);
 }
 
