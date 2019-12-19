@@ -27,29 +27,6 @@
 			}
 
 			Pass {
-
-			Tags
-			{
-				"Queue" = "Transparent"
-			}
-
-				ZWrite Off
-				HLSLPROGRAM
-
-				#pragma target 3.5
-
-				#pragma multi_compile_instancing
-				#pragma instancing_options assumeuniformscaling
-
-				#pragma vertex OutlinePassVert
-				#pragma fragment OutlinePassFrag
-
-				#include "../ShaderLibrary/Outline.hlsl"
-
-				ENDHLSL
-			}
-
-			Pass {
 				Tags {
 					"LightMode" = "ShadowCaster"
 				}

@@ -16,9 +16,6 @@ CBUFFER_END
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/UnityInstancing.hlsl"
 
-UNITY_INSTANCING_BUFFER_START(PerInstance)
-	UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
-UNITY_INSTANCING_BUFFER_END(PerInstance)
 
 struct VertexInput
 {
@@ -29,13 +26,21 @@ struct VertexInput
 
 struct VertexOutput
 {
-    float4 clipPos : SV_POSITION;
+    float4 pos : SV_POSITION;
     float2 uv : TEXCOORD0;
 };
 
-float _OutlineWidth = 1.1f;
-float4 _OutlineColor = float4(0.5f, 0, 0, 1);
-sampler2D _OutlineTex;
+sampler2D _MainTex;
+            //the depth normals texture
+sampler2D _CameraDepthNormalsTexture;
+            //texelsize of the depthnormals texture
+float4 _CameraDepthNormalsTexture_TexelSize;
+
+float4 _OutlineColor;
+float _NormalMult;
+float _NormalBias;
+float _DepthMult;
+float _DepthBias;
 
 VertexOutput OutlinePassVert(VertexInput input)
 {
@@ -44,19 +49,39 @@ VertexOutput OutlinePassVert(VertexInput input)
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     input.pos.xyz *= _OutlineWidth;
     float4 worldPos = mul(UNITY_MATRIX_M, float4(input.pos.xyz, 1.0));
-    output.clipPos = mul(unity_MatrixVP, worldPos);
-    float4 cliPosDos = mul(output.clipPos, input.pos);
-    output.clipPos = cliPosDos;
-    output.uv = float3(input.uv);
+    output.pos = mul(unity_MatrixVP, worldPos);
+    output.pos = mul(output.pos, input.pos);
+    output.uv = input.uv;
     
 
     return output;
 }
 
+void Compare(inout float depthOutline, inout float normalOutline,
+                    float baseDepth, float3 baseNormal, float2 uv, float2 offset)
+{
+                //read neighbor pixel
+    float4 neighborDepthnormal = tex2D(_CameraDepthNormalsTexture,
+                        uv + _CameraDepthNormalsTexture_TexelSize.xy * offset);
+    float3 neighborNormal;
+    float neighborDepth;
+    DecodeDepthNormal(neighborDepthnormal, neighborDepth, neighborNormal);
+    neighborDepth = neighborDepth * _ProjectionParams.z;
+
+    float depthDifference = baseDepth - neighborDepth;
+    depthOutline = depthOutline + depthDifference;
+
+    float3 normalDifference = baseNormal - neighborNormal;
+    normalDifference = normalDifference.r + normalDifference.g + normalDifference.b;
+    normalOutline = normalOutline + normalDifference;
+}
+
 float4 OutlinePassFrag(VertexOutput input) : SV_TARGET
 {
     UNITY_SETUP_INSTANCE_ID(input);
-    return UNITY_ACCESS_INSTANCED_PROP(PerInstance, _Color * _OutlineColor);
+    float4 sourceColor = _MainTex.Sample(sampler_MainTex, input.uv);
+    return sourceColor * _OutlineColor;
+    //return UNITY_ACCESS_INSTANCED_PROP(PerInstance, float4(_MainTex, input.uv));
 }
 
 #endif // MYRP_OUTLINE_INCLUDED
