@@ -1,4 +1,4 @@
-﻿Shader "Hidden/My Pipeline/PostEffectStack" {
+﻿Shader "Hidden/My Pipeline/TutoPostPro" {
 	SubShader{
 		Pass {
 			Cull Off

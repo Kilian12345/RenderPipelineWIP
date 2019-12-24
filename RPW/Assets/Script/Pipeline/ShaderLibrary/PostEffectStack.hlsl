@@ -123,7 +123,8 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     float outline = normalDifference + depthDifference;
     float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
     float4 color = lerp(sourceColor, _OutlineColor, outline);
-    return color;
+    //return color;
+    return SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);;
     
 }
 

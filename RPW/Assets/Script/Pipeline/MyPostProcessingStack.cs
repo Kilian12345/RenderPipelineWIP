@@ -27,7 +27,7 @@ public class MyPostProcessingStack : ScriptableObject
 		fullScreenTriangle.UploadMeshData(true);
 
 		material =
-			new Material(Shader.Find("Hidden/My Pipeline/PostEffectStack"))
+			new Material(Shader.Find("Hidden/My Pipeline/TutoPostPro"))
 			{
 				name = "My Post-Processing Stack material",
 				hideFlags = HideFlags.HideAndDontSave
@@ -37,6 +37,7 @@ public class MyPostProcessingStack : ScriptableObject
 	public void Render(CommandBuffer cb, int cameraColorId , int cameraDepthId)
 	{
 		InitializeStatic();
+		Debug.Log(material + "material");
 		cb.SetRenderTarget(
 			BuiltinRenderTextureType.CameraTarget,
 			RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store
