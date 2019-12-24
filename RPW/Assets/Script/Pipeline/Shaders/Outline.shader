@@ -2,22 +2,23 @@
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
+        [HideInInspector] _MainTex("Texture", 2D) = "white" {}
+        _OutlineColor("Outline Color", Color) = (0,0,0,1)
+        _NormalMult("Normal Outline Multiplier", Range(0,4)) = 1
+        _NormalBias("Normal Outline Bias", Range(1,4)) = 1
+        _DepthMult("Depth Outline Multiplier", Range(0,4)) = 1
+        _DepthBias("Depth Outline Bias", Range(1,4)) = 1
     }
     SubShader
     {
         Tags { "RenderType"="Opaque" }
         LOD 100
+        Cull Off
+        ZWrite Off
+        ZTest Always
 
         Pass
         {
-
-			Tags
-			{
-				"Queue" = "Transparent"
-			}
-
-				ZWrite Off
 				HLSLPROGRAM
 
 				#pragma target 3.5

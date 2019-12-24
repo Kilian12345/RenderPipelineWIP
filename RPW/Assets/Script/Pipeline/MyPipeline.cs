@@ -67,6 +67,11 @@ public class MyPipeline : RenderPipeline
         name = "Render Shadows"
     };
 
+    CommandBuffer postProcessingBuffer = new CommandBuffer
+    {
+        name = "Post-Processing"
+    };
+
     DrawRendererFlags drawFlags;
 
     int shadowMapSize;
@@ -77,8 +82,13 @@ public class MyPipeline : RenderPipeline
 
     bool mainLightExists;
 
+    // OUTLINE
+    MyPostProcessingStack defaultStack;
+    static int cameraColorTextureId = Shader.PropertyToID("_CameraColorTexture");
+    static int cameraDepthTextureId = Shader.PropertyToID("_CameraDepthTexture");
+
     public MyPipeline(
-        bool dynamicBatching, bool instancing,
+        bool dynamicBatching, bool instancing, MyPostProcessingStack defaultStack,
         int shadowMapSize, float shadowDistance,
         int shadowCascades, Vector3 shadowCascasdeSplit
     )
@@ -97,6 +107,7 @@ public class MyPipeline : RenderPipeline
         {
             drawFlags |= DrawRendererFlags.EnableInstancing;
         }
+        this.defaultStack = defaultStack;
         this.shadowMapSize = shadowMapSize;
         this.shadowDistance = shadowDistance;
         this.shadowCascades = shadowCascades;
@@ -168,6 +179,23 @@ public class MyPipeline : RenderPipeline
 
         context.SetupCameraProperties(camera);
 
+        if (defaultStack)
+        {
+            cameraBuffer.GetTemporaryRT(
+                cameraColorTextureId, camera.pixelWidth, camera.pixelHeight, 0
+            );
+            cameraBuffer.GetTemporaryRT(
+                cameraDepthTextureId, camera.pixelWidth, camera.pixelHeight, 24,
+                FilterMode.Point, RenderTextureFormat.Depth
+            );
+            cameraBuffer.SetRenderTarget(
+                cameraColorTextureId,
+                RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store,
+                cameraDepthTextureId,
+                RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store
+            );
+        }
+
         CameraClearFlags clearFlags = camera.clearFlags;
         cameraBuffer.ClearRenderTarget(
             (clearFlags & CameraClearFlags.Depth) != 0,
@@ -215,6 +243,7 @@ public class MyPipeline : RenderPipeline
 
         context.DrawSkybox(camera);
 
+
         drawSettings.sorting.flags = SortFlags.CommonTransparent;
         filterSettings.renderQueueRange = RenderQueueRange.transparent;
         context.DrawRenderers(
@@ -222,6 +251,15 @@ public class MyPipeline : RenderPipeline
         );
 
         DrawDefaultPipeline(context, camera);
+
+        if (defaultStack)
+        {
+            defaultStack.Render(postProcessingBuffer, cameraColorTextureId, cameraDepthTextureId);
+            context.ExecuteCommandBuffer(postProcessingBuffer);
+            postProcessingBuffer.Clear();
+            cameraBuffer.ReleaseTemporaryRT(cameraColorTextureId);
+            cameraBuffer.ReleaseTemporaryRT(cameraDepthTextureId);
+        }
 
         cameraBuffer.EndSample("Render Camera");
         context.ExecuteCommandBuffer(cameraBuffer);
@@ -542,6 +580,7 @@ public class MyPipeline : RenderPipeline
         return texture;
     }
 
+
     Vector2 ConfigureShadowTile(int tileIndex, int split, float tileSize)
     {
         Vector2 tileOffset;
@@ -603,5 +642,6 @@ public class MyPipeline : RenderPipeline
         context.DrawRenderers(
             cull.visibleRenderers, ref drawSettings, filterSettings
         );
+
     }
 }
