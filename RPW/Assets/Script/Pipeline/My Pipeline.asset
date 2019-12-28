@@ -19,3 +19,4 @@ MonoBehaviour:
   shadowCascades: 4
   twoCascadesSplit: 0.25
   fourCascadesSplit: {x: 0.067, y: 0.2, z: 0.5344606}
+  defaultStack: {fileID: 11400000, guid: 0bbff29b4e984be479b6309d8fb89205, type: 2}

@@ -7,6 +7,7 @@ public class MyPostProcessingStack : ScriptableObject
 
 	static Mesh fullScreenTriangle;
 	static Material material;
+	static int mainTexId = Shader.PropertyToID("_MainTex");
 
 	static void InitializeStatic()
 	{
@@ -27,7 +28,7 @@ public class MyPostProcessingStack : ScriptableObject
 		fullScreenTriangle.UploadMeshData(true);
 
 		material =
-			new Material(Shader.Find("Hidden/My Pipeline/TutoPostPro"))
+			new Material(Shader.Find("My Pipeline/TutoPostPro"))
 			{
 				name = "My Post-Processing Stack material",
 				hideFlags = HideFlags.HideAndDontSave
@@ -36,6 +37,7 @@ public class MyPostProcessingStack : ScriptableObject
 
 	public void Render(CommandBuffer cb, int cameraColorId , int cameraDepthId)
 	{
+		cb.SetGlobalTexture(mainTexId, cameraColorId);
 		InitializeStatic();
 		Debug.Log(material + "material");
 		cb.SetRenderTarget(
