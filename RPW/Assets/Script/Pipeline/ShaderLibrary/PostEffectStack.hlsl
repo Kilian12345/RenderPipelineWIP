@@ -147,10 +147,13 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, 1));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, -1));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(-1, 0));
-
-    return depthDifference;
     
-    /*float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
+    float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
+    float4 color = lerp(sourceColor, _OutlineColor, depthDifference);
+    
+    return color;
+    
+    /*
     float outline = /*normalDifference +depthDifference;
     float4 color = lerp(sourceColor, _OutlineColor, outline);
     return color;*/
