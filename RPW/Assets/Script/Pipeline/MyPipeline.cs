@@ -87,6 +87,7 @@ public class MyPipeline : RenderPipeline
     static int cameraColorTextureId = Shader.PropertyToID("_CameraColorTexture");
     static int cameraDepthTextureId = Shader.PropertyToID("_CameraDepthTexture");
 
+
     public MyPipeline(
         bool dynamicBatching, bool instancing, MyPostProcessingStack defaultStack,
         int shadowMapSize, float shadowDistance,
