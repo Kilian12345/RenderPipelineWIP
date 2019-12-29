@@ -35,10 +35,10 @@ struct VertexOutput
 };
 
 float4 _OutlineColor = float4(1,0,0,1);
-float _NormalMult = 1;
-float _NormalBias = 1;
-float _DepthMult = 1;
-float _DepthBias = 1;
+float _NormalMult;
+float _NormalBias;
+float _DepthMult = 0.1f;
+float _DepthBias;
 
 
 inline float3 UnityObjectToWorldDir(in float3 dir)
@@ -148,8 +148,13 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, -1));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(-1, 0));
     
+    //depthDifference = depthDifference * _DepthMult;
+    depthDifference = depthDifference * 0.1;
+    //depthDifference = saturate(depthDifference);
+    depthDifference = pow(depthDifference, 1);
+    
     float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-    float4 color = lerp(sourceColor, _OutlineColor, depthDifference);
+    float4 color = lerp(sourceColor, float4(1, 1, 1, 1), depthDifference);
     
     return color;
     
