@@ -86,7 +86,7 @@ float Compare(float baseDepth, float2 uv, float2 offset)
     
     float r = baseDepth - neighborDepth;
 
-    return r;
+    return r ;
 }
 
 VertexOutput CopyPassVertex(VertexInput input)
@@ -97,7 +97,8 @@ VertexOutput CopyPassVertex(VertexInput input)
     if (_ProjectionParams.x < 0.0)
     {output.uv.y = 1.0 - output.uv.y;}
     
-    float3 worldNorm = UnityObjectToWorldNormal((float3)input.normal);
+        
+    float3 worldNorm = UnityObjectToWorldNormal((float3) input.normal);
     float3 viewNorm = mul((float3x3) unity_MatrixV, worldNorm);
     
     return output;
@@ -136,6 +137,7 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
 
 float4 CopyPassFragment(VertexOutput input) : SV_TARGET
 {
+    
     float depthTex = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_CameraDepthTexture,
                         input.uv).r;
     float depth = depthTex.r;
@@ -147,16 +149,19 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, 1));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, -1));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(-1, 0));
+   
     
-    //depthDifference = depthDifference * _DepthMult;
-    depthDifference = depthDifference * 0.1;
-    //depthDifference = saturate(depthDifference);
+    depthDifference = depthDifference * 0.2;
+    depthDifference = saturate(depthDifference);
     depthDifference = pow(depthDifference, 1);
     
+    float depthDifferenceClose = depthDifference;
+    
     float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-    float4 color = lerp(sourceColor, float4(1, 1, 1, 1), depthDifference);
+    float4 color = lerp(sourceColor, float4(0, 0, 0, 1), depthDifference);
     
     return color;
+    //return depthDifference;
     
     /*
     float outline = /*normalDifference +depthDifference;
