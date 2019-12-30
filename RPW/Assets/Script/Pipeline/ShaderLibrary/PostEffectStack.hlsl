@@ -10,9 +10,11 @@ float4 _CameraDepthTexture_TexelSize;
 TEXTURE2D(_MainTex);
 SAMPLER(sampler_MainTex);
 float4 _ProjectionParams;
+float4 _WorldSpaceCameraPos;
 
 CBUFFER_START(UnityPerFrame)
 float4x4 unity_MatrixV;
+float4x4 UNITY_MATRIX_VP;
 CBUFFER_END
 
 CBUFFER_START(UnityPerDraw)
@@ -40,6 +42,7 @@ float _NormalBias;
 float _DepthMult = 0.1f;
 float _DepthBias;
 
+// INLINE FUNCTIONS ------------------
 
 inline float3 UnityObjectToWorldDir(in float3 dir)
 {
@@ -55,6 +58,18 @@ inline float3 UnityObjectToWorldNormal(in float3 norm)
     return normalize(mul(norm, (float3x3) unity_WorldToObject));
 #endif
 }
+
+
+inline float3 UnityObjectToViewPos(in float3 pos)
+{
+    return mul(unity_MatrixV, mul(unity_ObjectToWorld, float4(pos, 1.0))).xyz;
+}
+inline float3 UnityObjectToViewPos(float4 pos) // overload for float4; avoids "implicit truncation" warning for existing shaders
+{
+    return UnityObjectToViewPos(pos.xyz);
+}
+
+// -----------------
 
 /*
 void Compare(inout float depthOutline, inout float normalOutline,
@@ -97,9 +112,6 @@ VertexOutput CopyPassVertex(VertexInput input)
     if (_ProjectionParams.x < 0.0)
     {output.uv.y = 1.0 - output.uv.y;}
     
-        
-    float3 worldNorm = UnityObjectToWorldNormal((float3) input.normal);
-    float3 viewNorm = mul((float3x3) unity_MatrixV, worldNorm);
     
     return output;
 }
@@ -144,23 +156,33 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     float3 normal;
     depth = depth * _ProjectionParams.z;
     
-    
-    float depthDifference = Compare(depth, input.uv, float2(1, 0));
-    depthDifference = depthDifference + Compare(depth, input.uv, float2(0, 1));
-    depthDifference = depthDifference + Compare(depth, input.uv, float2(0, -1));
-    depthDifference = depthDifference + Compare(depth, input.uv, float2(-1, 0));
+    //Black
+    float depthDifference = Compare(depth, input.uv, float2(2, 0));
+    depthDifference = depthDifference + Compare(depth, input.uv, float2(0, 2));
+    depthDifference = depthDifference + Compare(depth, input.uv, float2(0, -2));
+    depthDifference = depthDifference + Compare(depth, input.uv, float2(-2, 0));
    
+    //White
+    float depthDifferenceClose = Compare(depth, input.uv, float2(1, 0));
+    depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(0, 1));
+    depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(0, -1));
+    depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(-1, 0));
     
     depthDifference = depthDifference * 0.2;
     depthDifference = saturate(depthDifference);
-    depthDifference = pow(depthDifference, 1);
+    depthDifference = pow(depthDifference, 1);  
     
-    float depthDifferenceClose = depthDifference;
+    depthDifferenceClose = depthDifferenceClose * 0.2;
+    //depthDifferenceClose = saturate(depthDifferenceClose);
+    depthDifferenceClose = pow(depthDifferenceClose, 1);
+   
     
     float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
     float4 color = lerp(sourceColor, float4(0, 0, 0, 1), depthDifference);
+    color += lerp(sourceColor, float4(1, 1, 1, 1), depthDifferenceClose) - sourceColor;
     
     return color;
+    //return sourceColor;
     //return depthDifference;
     
     /*
