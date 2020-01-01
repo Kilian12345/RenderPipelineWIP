@@ -26,14 +26,14 @@ struct VertexInput
 {
     float4 pos : POSITION;
     float2 uv : TEXCOORD0;
-    float4 normal : NORMAL;
+    float3 normal : NORMAL;
 };
 
 struct VertexOutput
 {
     float4 clipPos : SV_POSITION;
     float2 uv : TEXCOORD0;
-    float4 normal : NORMAL;
+    float3 normal : TEXCOORD1;
 };
 
 float4 _OutlineColor = float4(1,0,0,1);
@@ -71,24 +71,6 @@ inline float3 UnityObjectToViewPos(float4 pos) // overload for float4; avoids "i
 
 // -----------------
 
-/*
-void Compare(inout float depthOutline, inout float normalOutline,
-                    float baseDepth, float3 baseNormal, float2 uv, float2 offset)
-{
-                //read neighbor pixel
-    float4 neighborDepthTex = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_CameraDepthTexture,
-                        uv + _CameraDepthTexture_TexelSize.xy * offset);
-    float neighborDepth = neighborDepthTex.r;
-    float3 neighborNormal;
-    neighborDepth = neighborDepth * _ProjectionParams.z;
-
-    float depthDifference = baseDepth - neighborDepth;
-    depthOutline = depthOutline + depthDifference;
-
-    float3 normalDifference = baseNormal - neighborNormal;
-    normalDifference = normalDifference.r + normalDifference.g + normalDifference.b;
-    normalOutline = normalOutline + normalDifference;
-}*/
 
 float Compare(float baseDepth, float2 uv, float2 offset)
 {
@@ -112,40 +94,9 @@ VertexOutput CopyPassVertex(VertexInput input)
     if (_ProjectionParams.x < 0.0)
     {output.uv.y = 1.0 - output.uv.y;}
     
-    
     return output;
 }
 
-/*
-float4 CopyPassFragment(VertexOutput input) : SV_TARGET
-{
-    float depthTex = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_CameraDepthTexture,
-                        input.uv).r;
-    float depth = depthTex.r;
-    float3 normal;
-    depth = depth * _ProjectionParams.z;
-    
-    float depthDifference = 0;
-    float normalDifference = 0;
-    
-    Compare(depthDifference, normalDifference, depth, normal, input.uv, float2(1, 0));
-    Compare(depthDifference, normalDifference, depth, normal, input.uv, float2(0, 1));
-    Compare(depthDifference, normalDifference, depth, normal, input.uv, float2(0, -1));
-    Compare(depthDifference, normalDifference, depth, normal, input.uv, float2(-1, 0));
-    
-    depthDifference = depthDifference * _DepthMult;
-    depthDifference = saturate(depthDifference);
-    depthDifference = pow(depthDifference, _DepthBias);
-
-    normalDifference = normalDifference * _NormalMult;
-    normalDifference = saturate(normalDifference);
-    normalDifference = pow(normalDifference, _NormalBias);
-    
-    float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-    float outline = /*normalDifference + depthDifference;
-    float4 color = lerp(sourceColor, _OutlineColor, outline);
-    return color;
-}*/
 
 float4 CopyPassFragment(VertexOutput input) : SV_TARGET
 {
@@ -168,11 +119,11 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(0, -1));
     depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(-1, 0));
     
-    depthDifference = depthDifference * 0.2;
+    depthDifference = depthDifference * 5.5;
     depthDifference = saturate(depthDifference);
     depthDifference = pow(depthDifference, 1);  
     
-    depthDifferenceClose = depthDifferenceClose * 0.2;
+    depthDifferenceClose = depthDifferenceClose * 5.5;
     depthDifferenceClose = saturate(depthDifferenceClose);
     depthDifferenceClose = pow(depthDifferenceClose, 1);
    
