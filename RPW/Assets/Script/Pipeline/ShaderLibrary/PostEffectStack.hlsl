@@ -154,15 +154,15 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
                         input.uv).r;
     float depth = depthTex.r;
     float3 normal;
-    depth = depth * _ProjectionParams.z;
+    depth = depth * _ProjectionParams.z; // +1 for manga effect
     
-    //Black
+    //White
     float depthDifference = Compare(depth, input.uv, float2(2, 0));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, 2));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(0, -2));
     depthDifference = depthDifference + Compare(depth, input.uv, float2(-2, 0));
    
-    //White
+    //Black
     float depthDifferenceClose = Compare(depth, input.uv, float2(1, 0));
     depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(0, 1));
     depthDifferenceClose = depthDifferenceClose + Compare(depth, input.uv, float2(0, -1));
@@ -173,13 +173,14 @@ float4 CopyPassFragment(VertexOutput input) : SV_TARGET
     depthDifference = pow(depthDifference, 1);  
     
     depthDifferenceClose = depthDifferenceClose * 0.2;
-    //depthDifferenceClose = saturate(depthDifferenceClose);
+    depthDifferenceClose = saturate(depthDifferenceClose);
     depthDifferenceClose = pow(depthDifferenceClose, 1);
    
     
     float4 sourceColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-    float4 color = lerp(sourceColor, float4(0, 0, 0, 1), depthDifference);
-    color += lerp(sourceColor, float4(1, 1, 1, 1), depthDifferenceClose) - sourceColor;
+    float4 color = 0;
+    color += lerp(sourceColor, float4(1, 1, 1, 1), depthDifference - depthDifferenceClose);
+    color += lerp(sourceColor, float4(0, 0, 0, 1), depthDifferenceClose) - sourceColor;
     
     return color;
     //return sourceColor;
